@@ -104,6 +104,7 @@
   <div class="card">
     <h2>3. Skrip</h2>
     <textarea id="script" placeholder="Tempel skrip lo di sini. Pisahkan paragraf dengan baris kosong."></textarea>
+    <div class="small">Opsional (model 3.8): sisipkan &lt;short pause&gt;, &lt;long pause&gt;, &lt;laugh&gt;, &lt;sigh&gt;, atau &lt;breath&gt; di dalam skrip untuk jeda atau suara kecil.</div>
     <div class="row">
       <div><label>Pecah skrip per</label>
         <select id="splitMode">
@@ -272,15 +273,18 @@ function retryDelay(j){
 async function tts(text, onWait){
   const key=$("key").value.trim(); if(!key) throw new Error("Isi API key dulu di langkah 1.");
   const model=$("model").value, voice=$("voice").value, style=getStyle();
-  const prompt = style ? `${style}:\n${text}` : text;
   const base="https://generativelanguage.googleapis.com/v1beta/";
-  const attempts = [
-    { url:`${base}models/${model}:generateContent`,
-      body:{ contents:[{parts:[{text:prompt}]}],
-             generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:voice } } } } } },
-    { url:`${base}interactions`,
-      body:{ model, input:prompt, response_format:{type:"audio"}, generation_config:{ speech_config:[{voice}] } } }
-  ];
+  // Gemini 3.8 reads the text verbatim, so style must go in speech_metadata (never in the text).
+  const verbatim = /^gemini-3\.8/.test(model);
+  const content = { type:"text", text };
+  if(style) content.annotations=[{ type:"speech_metadata", style }];
+  const interactions = { url:`${base}interactions`,
+    body:{ model, input:[{ type:"user_input", content:[content] }], response_format:{type:"audio"}, generation_config:{ speech_config:[{voice}] } } };
+  const gcText = (!verbatim && style) ? `${style}:\n${text}` : text;
+  const generate = { url:`${base}models/${model}:generateContent`,
+    body:{ contents:[{parts:[{text:gcText}]}],
+           generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:voice } } } } } };
+  const attempts = verbatim ? [interactions, generate] : [generate, interactions];
   let lastErr="";
   for(const a of attempts){
     for(let tryN=0; tryN<4; tryN++){
