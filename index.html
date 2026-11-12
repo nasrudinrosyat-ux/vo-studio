@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VO Studio</title>
+<meta name="theme-color" content="#0b1026">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b1026; --card:#141b3a; --card2:#1b2450; --line:#2a3566;
+    --text:#eef1ff; --muted:#9aa3c7; --accent:#ffc94d; --accent2:#7aa2ff;
+    --ok:#5fd39a; --err:#ff7a7a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#24306b 0%,transparent 60%),var(--bg);
+    color:var(--text);font-family:Poppins,system-ui,sans-serif;min-height:100vh}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 120px}
+  header{display:flex;align-items:center;gap:12px;margin:6px 0 18px}
+  header img{width:44px;height:44px;border-radius:12px}
+  h1{font-size:22px;margin:0;letter-spacing:-.5px}
+  header p{margin:0;color:var(--muted);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:15px;margin:0 0 10px;font-weight:600;letter-spacing:-.3px}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 6px}
+  input,select,textarea{width:100%;background:var(--card2);color:var(--text);border:1px solid var(--line);
+    border-radius:10px;padding:11px 12px;font:inherit;font-size:14.5px;outline:none}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent2)}
+  textarea{min-height:220px;resize:vertical;line-height:1.55}
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  button{font:inherit;border:0;border-radius:12px;padding:11px 14px;font-weight:600;cursor:pointer;font-size:14px}
+  .btn{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+  .btn-main{background:var(--accent);color:#1a1400}
+  .btn:disabled,.btn-main:disabled{opacity:.45;cursor:not-allowed}
+  .small{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+  .range{display:flex;align-items:center;gap:10px}.range input{flex:1;padding:0}
+  .range b{min-width:62px;text-align:right;font-size:13px}
+  .seg{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;background:var(--card2)}
+  .seg .t{font-size:13.5px;line-height:1.5;margin-bottom:8px;white-space:pre-wrap}
+  .seg .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .seg .bar button{padding:7px 11px;font-size:12.5px}
+  .st{font-size:12px;color:var(--muted)} .st.ok{color:var(--ok)} .st.err{color:var(--err)} .st.run{color:var(--accent)}
+  .sticky{position:fixed;left:0;right:0;bottom:0;background:rgba(11,16,38,.92);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);padding:12px 16px calc(12px + env(safe-area-inset-bottom))}
+  .sticky .in{max-width:760px;margin:0 auto;display:flex;gap:10px;align-items:center}
+  .sticky .in button{flex:1}
+  #msg{font-size:12.5px;color:var(--muted);max-width:760px;margin:0 auto 8px}
+  audio{width:100%;margin-top:10px}
+  .eye{position:relative}.eye button{position:absolute;right:6px;top:6px;padding:6px 10px;font-size:12px}
+  a{color:var(--accent2)}
+  #installBtn{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon-192.png" alt="">
+    <div><h1>VO Studio</h1><p>Skrip masuk, voice over keluar</p></div>
+    <button id="installBtn" class="btn" style="margin-left:auto">Install</button>
+  </header>
+
+  <div class="card">
+    <h2>1. API key Gemini</h2>
+    <div class="eye">
+      <input id="key" type="password" placeholder="Tempel API key dari aistudio.google.com" autocomplete="off">
+      <button class="btn" id="showKey" type="button">Lihat</button>
+    </div>
+    <div class="small">Key disimpan hanya di perangkat ini. Ambil gratis di <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a>.</div>
+  </div>
+
+  <div class="card">
+    <h2>2. Suara & gaya</h2>
+    <div class="row">
+      <div><label>Suara</label><select id="voice"></select></div>
+      <div><label>Model</label>
+        <select id="model">
+          <option value="gemini-3.8-flash-tts">3.8 Flash TTS (terbaik)</option>
+          <option value="gemini-3.8-flash-lite-tts">3.8 Flash-Lite TTS (hemat)</option>
+          <option value="gemini-3.1-flash-tts-preview">3.1 Flash TTS</option>
+          <option value="gemini-2.5-flash-preview-tts">2.5 Flash TTS</option>
+        </select>
+      </div>
+    </div>
+    <label>Gaya bicara</label>
+    <select id="stylePreset">
+      <option value="Bacakan dalam bahasa Indonesia dengan santai dan natural, seperti orang yang lagi bercerita ke teman, tempo sedang">Santai bercerita</option>
+      <option value="Bacakan dalam bahasa Indonesia dengan antusias dan penuh rasa kagum, seperti lagi membagikan fakta yang bikin takjub">Antusias & kagum</option>
+      <option value="Bacakan dalam bahasa Indonesia dengan tenang, hangat, dan berwibawa seperti narator film dokumenter, tempo agak lambat">Narator dokumenter</option>
+      <option value="Bacakan dalam bahasa Indonesia dengan energik dan cepat seperti konten media sosial yang seru">Energik konten</option>
+      <option value="custom">Tulis sendiri…</option>
+      <option value="">Tanpa arahan gaya</option>
+    </select>
+    <textarea id="styleCustom" style="min-height:70px;display:none;margin-top:8px" placeholder="Contoh: Bacakan dengan suara pelan dan misterius, tempo lambat"></textarea>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" id="sampleBtn" type="button">Coba suara ini</button>
+    </div>
+    <audio id="sampleAudio" controls style="display:none"></audio>
+  </div>
+
+  <div class="card">
+    <h2>3. Skrip</h2>
+    <textarea id="script" placeholder="Tempel skrip lo di sini. Pisahkan paragraf dengan baris kosong."></textarea>
+    <div class="row">
+      <div><label>Pecah skrip per</label>
+        <select id="splitMode">
+          <option value="para">Paragraf (baris kosong)</option>
+          <option value="line">Setiap baris</option>
+        </select>
+      </div>
+      <div><label>Jeda antar bagian</label>
+        <div class="range"><input id="pause" type="range" min="0" max="2000" step="50" value="500"><b id="pauseV">0.50 dtk</b></div>
+      </div>
+    </div>
+    <div class="small" id="stats">0 bagian</div>
+  </div>
+
+  <div class="card" id="segCard" style="display:none">
+    <h2>4. Hasil per bagian</h2>
+    <div class="small">Kalau ada bagian yang intonasinya kurang pas, tekan "Ulang" di bagian itu saja.</div>
+    <div id="segs"></div>
+    <audio id="fullAudio" controls style="display:none"></audio>
+  </div>
+</div>
+
+<div class="sticky">
+  <div id="msg"></div>
+  <div class="in">
+    <button class="btn-main" id="genBtn">Generate VO</button>
+    <button class="btn" id="dlBtn" disabled>Download WAV</button>
+  </div>
+</div>
+
+<script>
+const VOICES = [
+ ["Charon","Informatif"],["Sadaltager","Berwawasan"],["Rasalgethi","Informatif"],["Iapetus","Jernih"],
+ ["Algieba","Halus"],["Orus","Tegas"],["Alnilam","Tegas"],["Gacrux","Dewasa"],["Algenib","Serak"],
+ ["Umbriel","Santai"],["Zubenelgenubi","Kasual"],["Achird","Ramah"],["Puck","Ceria"],["Fenrir","Bersemangat"],
+ ["Enceladus","Berdesah"],["Schedar","Stabil"],["Kore","Tegas"],["Zephyr","Cerah"],["Leda","Muda"],
+ ["Aoede","Ringan"],["Callirrhoe","Santai"],["Autonoe","Cerah"],["Despina","Halus"],["Erinome","Jernih"],
+ ["Laomedeia","Ceria"],["Achernar","Lembut"],["Pulcherrima","Lugas"],["Sadachbia","Hidup"],
+ ["Sulafat","Hangat"],["Vindemiatrix","Lembut"]
+];
+const $ = id => document.getElementById(id);
+const store = {
+  get(k,d){ try{ const v=localStorage.getItem("vo_"+k); return v===null?d:v }catch(e){ return d } },
+  set(k,v){ try{ localStorage.setItem("vo_"+k,v) }catch(e){} }
+};
+
+// ---------- UI setup ----------
+VOICES.forEach(([n,d])=>{ const o=document.createElement("option"); o.value=n; o.textContent=`${n} — ${d}`; $("voice").appendChild(o); });
+$("key").value = store.get("key","");
+$("voice").value = store.get("voice","Charon");
+$("model").value = store.get("model","gemini-3.8-flash-tts");
+$("stylePreset").value = store.get("preset",$("stylePreset").options[0].value);
+$("styleCustom").value = store.get("custom","");
+$("script").value = store.get("script","");
+$("splitMode").value = store.get("split","para");
+$("pause").value = store.get("pause","500");
+function syncStyle(){ $("styleCustom").style.display = $("stylePreset").value==="custom"?"block":"none"; }
+syncStyle();
+function syncPause(){ $("pauseV").textContent=(+$("pause").value/1000).toFixed(2)+" dtk"; }
+syncPause();
+
+$("showKey").onclick=()=>{ const k=$("key"); k.type=k.type==="password"?"text":"password"; $("showKey").textContent=k.type==="password"?"Lihat":"Tutup"; };
+$("key").oninput=()=>store.set("key",$("key").value.trim());
+$("voice").onchange=()=>{store.set("voice",$("voice").value); markAllStale();};
+$("model").onchange=()=>store.set("model",$("model").value);
+$("stylePreset").onchange=()=>{store.set("preset",$("stylePreset").value); syncStyle();};
+$("styleCustom").oninput=()=>store.set("custom",$("styleCustom").value);
+$("script").oninput=()=>{store.set("script",$("script").value); updateStats();};
+$("splitMode").onchange=()=>{store.set("split",$("splitMode").value); updateStats();};
+$("pause").oninput=()=>{store.set("pause",$("pause").value); syncPause(); if(segments.some(s=>s.pcm)) buildFull();};
+
+function getStyle(){ const p=$("stylePreset").value; return (p==="custom"?$("styleCustom").value:p).trim(); }
+function msg(t,cls){ $("msg").textContent=t||""; $("msg").style.color = cls==="err"?"var(--err)":cls==="ok"?"var(--ok)":"var(--muted)"; }
+
+// ---------- script splitting ----------
+function splitScript(text, mode){
+  text = text.replace(/\r/g,"").trim();
+  if(!text) return [];
+  let parts = mode==="line" ? text.split(/\n+/) : text.split(/\n\s*\n+/);
+  parts = parts.map(p=>p.replace(/\s*\n\s*/g," ").trim()).filter(Boolean);
+  const out=[];
+  for(const p of parts){
+    if(p.length<=1200){ out.push(p); continue; }
+    const sents = p.match(/[^.!?…]+[.!?…]+["')\]]*\s*|[^.!?…]+$/g) || [p];
+    let cur="";
+    for(const s of sents){ if((cur+s).length>900 && cur){ out.push(cur.trim()); cur=""; } cur+=s; }
+    if(cur.trim()) out.push(cur.trim());
+  }
+  return out;
+}
+function updateStats(){
+  const n = splitScript($("script").value,$("splitMode").value).length;
+  const ch = $("script").value.trim().length;
+  $("stats").textContent = `${n} bagian · ${ch} karakter · tiap bagian = 1 kali panggil API`;
+}
+updateStats();
+
+// ---------- audio helpers ----------
+function b64ToBytes(b64){ const bin=atob(b64); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+function decodeAudio(bytes, mime){
+  let rate = 24000;
+  const m = /rate=(\d+)/.exec(mime||""); if(m) rate=+m[1];
+  let off=0, len=bytes.length;
+  if(bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46){ // RIFF
+    const dv=new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let p=12;
+    while(p+8<=bytes.length){
+      const id=String.fromCharCode(bytes[p],bytes[p+1],bytes[p+2],bytes[p+3]);
+      const sz=dv.getUint32(p+4,true);
+      if(id==="fmt ") rate=dv.getUint32(p+12,true);
+      if(id==="data"){ off=p+8; len=Math.min(sz, bytes.length-off); break; }
+      p+=8+sz+(sz%2);
+    }
+  }
+  len -= len%2;
+  const copy = bytes.slice(off, off+len);
+  return { pcm:new Int16Array(copy.buffer), rate };
+}
+function trimSilence(pcm, rate){
+  const th=350, pad=Math.floor(rate*0.04);
+  let s=0, e=pcm.length-1;
+  while(s<pcm.length && Math.abs(pcm[s])<th) s++;
+  while(e>s && Math.abs(pcm[e])<th) e--;
+  return pcm.slice(Math.max(0,s-pad), Math.min(pcm.length,e+pad));
+}
+function resample(pcm, from, to){
+  if(from===to) return pcm;
+  const ratio=from/to, n=Math.floor(pcm.length/ratio), out=new Int16Array(n);
+  for(let i=0;i<n;i++){ const x=i*ratio, i0=Math.floor(x), f=x-i0; const a=pcm[i0]||0, b=pcm[i0+1]??a; out[i]=a+(b-a)*f; }
+  return out;
+}
+function wavBlob(pcm, rate){
+  const buf=new ArrayBuffer(44+pcm.length*2), dv=new DataView(buf);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++) dv.setUint8(o+i,s.charCodeAt(i));};
+  w(0,"RIFF"); dv.setUint32(4,36+pcm.length*2,true); w(8,"WAVE"); w(12,"fmt ");
+  dv.setUint32(16,16,true); dv.setUint16(20,1,true); dv.setUint16(22,1,true);
+  dv.setUint32(24,rate,true); dv.setUint32(28,rate*2,true); dv.setUint16(32,2,true); dv.setUint16(34,16,true);
+  w(36,"data"); dv.setUint32(40,pcm.length*2,true);
+  new Int16Array(buf,44).set(pcm);
+  return new Blob([buf],{type:"audio/wav"});
+}
+
+// ---------- Gemini API ----------
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function findAudio(obj){
+  // returns {data, mime}
+  let best=null;
+  (function walk(o){
+    if(!o||typeof o!=="object") return;
+    if(o.inlineData && o.inlineData.data) { best = best || {data:o.inlineData.data, mime:o.inlineData.mimeType}; return; }
+    if(typeof o.data==="string" && o.data.length>200 && (!best || o.data.length>best.data.length))
+      best = {data:o.data, mime:o.mime_type||o.mimeType||""};
+    for(const k in o) walk(o[k]);
+  })(obj);
+  return best;
+}
+async function callOnce(url, body, key){
+  const r = await fetch(url,{method:"POST",headers:{"x-goog-api-key":key,"Content-Type":"application/json"},body:JSON.stringify(body)});
+  let j=null; try{ j=await r.json(); }catch(e){}
+  return {status:r.status, json:j};
+}
+function retryDelay(j){
+  try{ const d=(j.error.details||[]).find(x=>x.retryDelay); if(d) return Math.ceil(parseFloat(d.retryDelay))*1000; }catch(e){}
+  return 20000;
+}
+async function tts(text, onWait){
+  const key=$("key").value.trim(); if(!key) throw new Error("Isi API key dulu di langkah 1.");
+  const model=$("model").value, voice=$("voice").value, style=getStyle();
+  const prompt = style ? `${style}:\n${text}` : text;
+  const base="https://generativelanguage.googleapis.com/v1beta/";
+  const attempts = [
+    { url:`${base}models/${model}:generateContent`,
+      body:{ contents:[{parts:[{text:prompt}]}],
+             generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:voice } } } } } },
+    { url:`${base}interactions`,
+      body:{ model, input:prompt, response_format:{type:"audio"}, generation_config:{ speech_config:[{voice}] } } }
+  ];
+  let lastErr="";
+  for(const a of attempts){
+    for(let tryN=0; tryN<4; tryN++){
+      let res;
+      try{ res = await callOnce(a.url, a.body, key); }
+      catch(e){ lastErr="Koneksi gagal. Cek internet."; await sleep(1500); continue; }
+      if(res.status===200){
+        const au=findAudio(res.json);
+        if(au) return decodeAudio(b64ToBytes(au.data), au.mime);
+        lastErr="Server tidak mengirim audio. Coba ulang atau ganti model."; break;
+      }
+      const em = res.json?.error?.message || ("HTTP "+res.status);
+      if(res.status===429){
+        if(/per day|PerDay|daily/i.test(em)){ throw new Error("Kuota gratis harian model ini habis. Ganti model (mis. Flash-Lite) atau coba lagi besok."); }
+        const wait=retryDelay(res.json); onWait && onWait(wait); await sleep(wait); continue;
+      }
+      if(res.status===500||res.status===503){ await sleep(3000); continue; }
+      if(res.status===400 && /API key/i.test(em)) throw new Error("API key tidak valid. Cek lagi key-nya.");
+      if(res.status===403) throw new Error("Akses ditolak: "+em);
+      lastErr=em; break; // try next attempt format
+    }
+  }
+  throw new Error(lastErr||"Gagal generate.");
+}
+
+// ---------- segments ----------
+let segments=[]; // {text, pcm, rate, status, el}
+const OUT_RATE=24000;
+function markAllStale(){ segments.forEach(s=>{ if(s.pcm){ s.stale=true; renderSeg(s); } }); }
+function renderSeg(s){
+  if(!s.el){
+    s.el=document.createElement("div"); s.el.className="seg";
+    s.el.innerHTML=`<div class="t"></div><div class="bar"><button class="btn play">Dengar</button><button class="btn redo">Ulang</button><span class="st"></span></div>`;
+    s.el.querySelector(".t").textContent=s.text;
+    s.el.querySelector(".play").onclick=()=>playSeg(s);
+    s.el.querySelector(".redo").onclick=()=>regen(s);
+    $("segs").appendChild(s.el);
+  }
+  const st=s.el.querySelector(".st");
+  st.className="st "+(s.status==="ok"?"ok":s.status==="err"?"err":s.status==="run"?"run":"");
+  st.textContent = s.status==="ok" ? (s.stale?"Selesai (suara lama)":"Selesai · "+(s.pcm.length/OUT_RATE).toFixed(1)+" dtk")
+    : s.status==="run" ? (s.note||"Memproses…") : s.status==="err" ? s.note : "Menunggu";
+  s.el.querySelector(".play").disabled=!s.pcm;
+  s.el.querySelector(".redo").disabled=busy;
+}
+let player=new Audio(), playUrl=null;
+function playSeg(s){
+  if(!s.pcm) return;
+  if(playUrl) URL.revokeObjectURL(playUrl);
+  playUrl=URL.createObjectURL(wavBlob(s.pcm,OUT_RATE));
+  player.src=playUrl; player.play().catch(()=>{});
+}
+async function genSeg(s){
+  s.status="run"; s.note="Memproses…"; renderSeg(s);
+  try{
+    const {pcm,rate}=await tts(s.text, w=>{ s.note=`Batas per menit, tunggu ${Math.round(w/1000)} dtk…`; renderSeg(s); });
+    s.pcm=resample(trimSilence(pcm,rate),rate,OUT_RATE); s.stale=false; s.status="ok";
+  }catch(e){ s.status="err"; s.note=e.message; throw e; }
+  finally{ renderSeg(s); }
+}
+let busy=false;
+function setBusy(b){ busy=b; $("genBtn").disabled=b; $("sampleBtn").disabled=b; segments.forEach(renderSeg); }
+
+$("genBtn").onclick=async()=>{
+  const parts=splitScript($("script").value,$("splitMode").value);
+  if(!parts.length){ msg("Skrip masih kosong.","err"); return; }
+  if(!$("key").value.trim()){ msg("Isi API key dulu di langkah 1.","err"); return; }
+  // keep finished segments whose text unchanged
+  const old=new Map(segments.filter(s=>s.pcm&&!s.stale).map(s=>[s.text,s]));
+  $("segs").innerHTML="";
+  segments=parts.map(t=>{ const o=old.get(t); return o?{...o,el:null}:{text:t,status:"wait"}; });
+  segments.forEach(renderSeg);
+  $("segCard").style.display="block";
+  setBusy(true); $("dlBtn").disabled=true;
+  let failed=0;
+  for(let i=0;i<segments.length;i++){
+    const s=segments[i];
+    if(s.pcm && !s.stale) continue;
+    msg(`Membuat bagian ${i+1} dari ${segments.length}…`);
+    try{ await genSeg(s); }catch(e){ failed++; if(/Kuota|API key|ditolak/.test(e.message)){ msg(e.message,"err"); break; } }
+  }
+  setBusy(false);
+  buildFull();
+  if(!failed) msg("Selesai! Dengarkan di bawah, lalu Download.","ok");
+  else if(!/Kuota|API key|ditolak/.test($("msg").textContent)) msg(`${failed} bagian gagal. Tekan "Ulang" di bagian itu.`,"err");
+};
+async function regen(s){
+  if(busy) return;
+  setBusy(true); msg("Mengulang satu bagian…");
+  try{ await genSeg(s); msg("Bagian diperbarui.","ok"); }catch(e){ msg(e.message,"err"); }
+  setBusy(false); buildFull();
+}
+
+let fullBlob=null, fullUrl=null;
+function buildFull(){
+  const done=segments.filter(s=>s.pcm);
+  if(!done.length){ $("dlBtn").disabled=true; $("fullAudio").style.display="none"; return; }
+  const gap=Math.round(OUT_RATE*(+$("pause").value)/1000);
+  const lead=Math.round(OUT_RATE*0.25);
+  let total=lead*2; done.forEach((s,i)=>{ total+=s.pcm.length+(i<done.length-1?gap:0); });
+  const out=new Int16Array(total); let p=lead;
+  done.forEach((s,i)=>{ out.set(s.pcm,p); p+=s.pcm.length+(i<done.length-1?gap:0); });
+  fullBlob=wavBlob(out,OUT_RATE);
+  if(fullUrl) URL.revokeObjectURL(fullUrl);
+  fullUrl=URL.createObjectURL(fullBlob);
+  $("fullAudio").src=fullUrl; $("fullAudio").style.display="block";
+  $("dlBtn").disabled=false;
+}
+$("dlBtn").onclick=()=>{
+  if(!fullBlob) return;
+  const a=document.createElement("a");
+  const d=new Date(), pad=n=>String(n).padStart(2,"0");
+  a.href=fullUrl; a.download=`VO_${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.wav`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+$("sampleBtn").onclick=async()=>{
+  setBusy(true); msg("Membuat contoh suara…");
+  try{
+    const {pcm,rate}=await tts("Halo! Pernah kepikiran nggak, kenapa langit malam itu gelap, padahal bintangnya ada miliaran?", w=>msg(`Batas per menit, tunggu ${Math.round(w/1000)} dtk…`));
+    const url=URL.createObjectURL(wavBlob(resample(trimSilence(pcm,rate),rate,OUT_RATE),OUT_RATE));
+    $("sampleAudio").src=url; $("sampleAudio").style.display="block"; $("sampleAudio").play().catch(()=>{});
+    msg("Contoh suara siap.","ok");
+  }catch(e){ msg(e.message,"err"); }
+  setBusy(false);
+};
+
+// ---------- install (PWA) ----------
+let deferred=null;
+window.addEventListener("beforeinstallprompt",e=>{ e.preventDefault(); deferred=e; $("installBtn").style.display="block"; });
+$("installBtn").onclick=async()=>{ if(!deferred) return; deferred.prompt(); await deferred.userChoice; deferred=null; $("installBtn").style.display="none"; };
+if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
