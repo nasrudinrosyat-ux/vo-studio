@@ -59,7 +59,7 @@
 <div class="wrap">
   <header>
     <img src="icon-192.png" alt="">
-    <div><h1>VO Studio</h1><p>Skrip masuk, voice over keluar · v1.4</p></div>
+    <div><h1>VO Studio</h1><p>Skrip masuk, voice over keluar · v1.5</p></div>
     <button id="installBtn" class="btn" style="margin-left:auto">Install</button>
   </header>
 
@@ -158,6 +158,9 @@
         <div class="range"><input id="pause" type="range" min="0" max="2000" step="50" value="500"><b id="pauseV">0.50 dtk</b></div>
       </div>
     </div>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--text);font-size:13.5px;margin-top:12px">
+      <input id="numFix" type="checkbox" style="width:auto" checked> Ubah angka jadi kata (mis. 384.400 km → tiga ratus delapan puluh empat ribu empat ratus kilometer)
+    </label>
     <div class="small" id="stats">0 bagian</div>
   </div>
 
@@ -234,6 +237,9 @@ function syncEngine(){
 $("engine").value = store.get("engine","gemini");
 $("engine").onchange=()=>{ store.set("engine",$("engine").value); syncEngine(); markAllStale(); };
 syncEngine();
+$("numFix").checked = store.get("numFix","1")==="1";
+$("numFix").onchange=()=>{ store.set("numFix",$("numFix").checked?"1":"0"); markAllStale(); };
+function prep(t){ return $("numFix").checked ? angkaKeKata(t) : t; }
 $("refText").value = store.get("refText","");
 $("refText").oninput=()=>{ store.set("refText",$("refText").value); markAllStale(); };
 $("hfToken").value = store.get("hf","");
@@ -341,6 +347,67 @@ function wavBlob(pcm, rate){
   return new Blob([buf],{type:"audio/wav"});
 }
 
+// ---------- angka -> kata (Bahasa Indonesia) ----------
+const SATUAN=["nol","satu","dua","tiga","empat","lima","enam","tujuh","delapan","sembilan","sepuluh","sebelas"];
+function terbilang(n){
+  n=Math.floor(n);
+  if(n<12) return SATUAN[n];
+  if(n<20) return SATUAN[n-10]+" belas";
+  if(n<100) return SATUAN[Math.floor(n/10)]+" puluh"+(n%10?" "+SATUAN[n%10]:"");
+  if(n<200) return "seratus"+(n%100?" "+terbilang(n%100):"");
+  if(n<1000) return SATUAN[Math.floor(n/100)]+" ratus"+(n%100?" "+terbilang(n%100):"");
+  if(n<2000) return "seribu"+(n%1000?" "+terbilang(n%1000):"");
+  const BIG=[[1e12,"triliun"],[1e9,"miliar"],[1e6,"juta"],[1e3,"ribu"]];
+  for(const [v,w] of BIG){ if(n>=v){ const q=Math.floor(n/v), r=n%v; return terbilang(q)+" "+w+(r?" "+terbilang(r):""); } }
+  return String(n);
+}
+function digitsWords(s){ return s.split("").map(d=>SATUAN[+d]).join(" "); }
+// parse an Indonesian-formatted number string -> words
+function numWords(raw){
+  let intPart=raw, dec="";
+  if(/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(raw)){ // 1.500.000 or 1.500,5
+    [intPart,dec=""]=raw.split(","); intPart=intPart.replace(/\./g,"");
+  } else if(/^\d+,\d+$/.test(raw)){ [intPart,dec]=raw.split(","); }
+  else if(/^\d+\.\d+$/.test(raw)){ [intPart,dec]=raw.split("."); } // 3.5 -> desimal
+  else if(/^\d{1,3}(,\d{3})+$/.test(raw)){ intPart=raw.replace(/,/g,""); } // 1,500 (gaya Inggris)
+  if(intPart.length>15) return digitsWords(intPart);
+  let w = (intPart.length>1 && intPart[0]==="0") ? digitsWords(intPart) : terbilang(+intPart);
+  if(dec) w+=" koma "+digitsWords(dec);
+  return w;
+}
+const UNITS=[
+  [/^km\/(s|dtk|detik)$/i,"kilometer per detik"],[/^km\/jam$/i,"kilometer per jam"],[/^km\/h$/i,"kilometer per jam"],
+  [/^m\/s$/i,"meter per detik"],[/^°C$/,"derajat Celsius"],[/^°F$/,"derajat Fahrenheit"],[/^°$/,"derajat"],
+  [/^km$/i,"kilometer"],[/^kg$/i,"kilogram"],[/^cm$/i,"sentimeter"],[/^mm$/i,"milimeter"],[/^m$/,"meter"],
+  [/^g$/,"gram"],[/^jt$/i,"juta"],[/^rb$/i,"ribu"],[/^ly$/i,"tahun cahaya"],[/^AU$/,"satuan astronomi"],[/^K$/,"kelvin"]
+];
+function unitWord(u){ for(const [re,w] of UNITS) if(re.test(u)) return w; return null; }
+function angkaKeKata(text){
+  const NUM="\\d[\\d.,]*\\d|\\d";
+  // time: jam 21.30 / pukul 07:05 / 21:30
+  text=text.replace(/\b(jam|pukul)\s?(\d{1,2})[.:](\d{2})\b/gi,(m,j,h,mn)=>j+" "+terbilang(+h)+(+mn? " "+terbilang(+mn):""));
+  text=text.replace(/\b(\d{1,2}):(\d{2})\b/g,(m,h,mn)=>terbilang(+h)+(+mn? " "+terbilang(+mn):""));
+  // ordinal: ke-3 -> ketiga, ke-1 -> pertama
+  text=text.replace(/\bke-?\s?(\d+)\b/gi,(m,n)=> +n===1?"pertama":"ke"+terbilang(+n));
+  // ranges: 10-20 / 10–20 -> sepuluh sampai dua puluh
+  text=text.replace(new RegExp("("+NUM+")\\s?[-–]\\s?("+NUM+")","g"),(m,a,b)=>numWords(a)+" sampai "+numWords(b));
+  // currency Rp
+  text=text.replace(new RegExp("Rp\\.?\\s?("+NUM+")","gi"),(m,a)=>numWords(a)+" rupiah");
+  // percent
+  text=text.replace(new RegExp("("+NUM+")\\s?%","g"),(m,a)=>numWords(a)+" persen");
+  // number + unit
+  text=text.replace(new RegExp("("+NUM+")\\s?(km\\/(?:s|dtk|detik|jam|h)|m\\/s|°[CF]?|km|kg|cm|mm|m|g|jt|rb|ly|AU|K)(?![A-Za-z])","g"),
+    (m,a,u)=>{ const w=unitWord(u); return w? numWords(a)+" "+w : m; });
+  // units right after big-number words (… miliar km/jam)
+  text=text.replace(/\b(ribu|juta|miliar|triliun)\s(km\/(?:s|dtk|detik|jam|h)|m\/s|km|kg|ly|AU)(?![A-Za-z])/g,(m,b,u)=>b+" "+(unitWord(u)||u));
+  // remaining numbers (keep a sentence-ending dot)
+  text=text.replace(new RegExp("("+NUM+")","g"),(m,a)=>{
+    let tail=""; if(/[.,]$/.test(a)){ tail=a.slice(-1); a=a.slice(0,-1); }
+    return numWords(a)+tail;
+  });
+  return text;
+}
+
 // ---------- Gemini API ----------
 const sleep = ms => new Promise(r=>setTimeout(r,ms));
 function findAudio(obj){
@@ -431,6 +498,7 @@ async function omniTTS(text, onWait){
 }
 
 async function tts(text, onWait){
+  text = prep(text);
   if($("engine").value==="omni") return omniTTS(text, onWait);
   const key=$("key").value.trim(); if(!key) throw new Error("Isi API key Gemini dulu.");
   const model=$("model").value, style=getStyle();
@@ -479,8 +547,9 @@ function markAllStale(){ segments.forEach(s=>{ if(s.pcm){ s.stale=true; renderSe
 function renderSeg(s){
   if(!s.el){
     s.el=document.createElement("div"); s.el.className="seg";
-    s.el.innerHTML=`<div class="t"></div><div class="bar"><button class="btn play">Dengar</button><button class="btn redo">Ulang</button><span class="st"></span></div>`;
+    s.el.innerHTML=`<div class="t"></div><div class="small sp" style="margin:-4px 0 8px"></div><div class="bar"><button class="btn play">Dengar</button><button class="btn redo">Ulang</button><span class="st"></span></div>`;
     s.el.querySelector(".t").textContent=s.text;
+    const spoken=prep(s.text); if(spoken!==s.text) s.el.querySelector(".sp").textContent="Dibaca: "+spoken;
     s.el.querySelector(".play").onclick=()=>playSeg(s);
     s.el.querySelector(".redo").onclick=()=>regen(s);
     $("segs").appendChild(s.el);
