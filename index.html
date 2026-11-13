@@ -59,12 +59,22 @@
 <div class="wrap">
   <header>
     <img src="icon-192.png" alt="">
-    <div><h1>VO Studio</h1><p>Skrip masuk, voice over keluar</p></div>
+    <div><h1>VO Studio</h1><p>Skrip masuk, voice over keluar · v1.4</p></div>
     <button id="installBtn" class="btn" style="margin-left:auto">Install</button>
   </header>
 
   <div class="card">
-    <h2>1. API key Gemini</h2>
+    <h2>1. Mesin suara</h2>
+    <select id="engine">
+      <option value="gemini">Gemini — suara bawaan (gratis)</option>
+      <option value="omni">Clone suara gw — OmniVoice (gratis)</option>
+    </select>
+    <div class="small" id="engineInfo"></div>
+  </div>
+
+<div id="geminiBox">
+  <div class="card">
+    <h2>API key Gemini</h2>
     <div class="eye">
       <input id="key" type="password" placeholder="Tempel API key dari aistudio.google.com" autocomplete="off">
       <button class="btn" id="showKey" type="button">Lihat</button>
@@ -73,7 +83,7 @@
   </div>
 
   <div class="card">
-    <h2>2. Suara & gaya</h2>
+    <h2>Suara & gaya Gemini</h2>
     <div class="row">
       <div><label>Suara</label><select id="voice"></select></div>
       <div><label>Model</label>
@@ -85,6 +95,9 @@
         </select>
       </div>
     </div>
+    <label>ID suara clone (opsional)</label>
+    <input id="cloneId" placeholder="Tempel ID dari AI Studio, mis. voice_xxxx" autocomplete="off">
+    <div class="small">Kalau diisi, suara clone ini dipakai dan pilihan suara di atas diabaikan. Hanya untuk model 3.8.</div>
     <label>Gaya bicara</label>
     <select id="stylePreset">
       <option value="Bacakan dalam bahasa Indonesia dengan santai dan natural, seperti orang yang lagi bercerita ke teman, tempo sedang">Santai bercerita</option>
@@ -95,14 +108,43 @@
       <option value="">Tanpa arahan gaya</option>
     </select>
     <textarea id="styleCustom" style="min-height:70px;display:none;margin-top:8px" placeholder="Contoh: Bacakan dengan suara pelan dan misterius, tempo lambat"></textarea>
-    <div class="row" style="margin-top:12px">
-      <button class="btn" id="sampleBtn" type="button">Coba suara ini</button>
+  </div>
+
+</div>
+
+<div id="omniBox" style="display:none">
+  <div class="card">
+    <h2>Rekaman suara referensi</h2>
+    <input id="refFile" type="file" accept="audio/*">
+    <div class="small" id="refInfo">Belum ada rekaman. Pilih file rekaman suara lo (disarankan 3–10 detik, ekspresif, ruangan sepi).</div>
+    <audio id="refAudio" controls style="display:none"></audio>
+    <label>Teks rekaman referensi</label>
+    <textarea id="refText" style="min-height:70px" placeholder="Tulis persis kalimat yang lo ucapkan di rekaman. Boleh dikosongkan (dideteksi otomatis)."></textarea>
+    <div class="row">
+      <div><label>Kecepatan bicara</label>
+        <div class="range"><input id="omniSpeed" type="range" min="0.7" max="1.3" step="0.05" value="1"><b id="omniSpeedV">1.00×</b></div>
+      </div>
+      <div><label>Kualitas</label>
+        <select id="omniSteps">
+          <option value="16">Cepat</option>
+          <option value="32" selected>Normal</option>
+          <option value="48">Tinggi (lebih lama)</option>
+        </select>
+      </div>
     </div>
+    <label>Token Hugging Face (opsional)</label>
+    <input id="hfToken" type="password" placeholder="hf_xxx — biar jatah GPU gratis lebih banyak" autocomplete="off">
+    <div class="small">Tanpa token tetap jalan, tapi jatah antrean gratisnya kecil. Bikin token gratis di <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a> (tipe Read).</div>
+  </div>
+</div>
+
+  <div class="card">
+    <button class="btn" id="sampleBtn" type="button" style="width:100%">Coba suara ini</button>
     <audio id="sampleAudio" controls style="display:none"></audio>
   </div>
 
   <div class="card">
-    <h2>3. Skrip</h2>
+    <h2>2. Skrip</h2>
     <textarea id="script" placeholder="Tempel skrip lo di sini. Pisahkan paragraf dengan baris kosong."></textarea>
     <div class="small">Opsional (model 3.8): sisipkan &lt;short pause&gt;, &lt;long pause&gt;, &lt;laugh&gt;, &lt;sigh&gt;, atau &lt;breath&gt; di dalam skrip untuk jeda atau suara kecil.</div>
     <div class="row">
@@ -120,7 +162,7 @@
   </div>
 
   <div class="card" id="segCard" style="display:none">
-    <h2>4. Hasil per bagian</h2>
+    <h2>3. Hasil per bagian</h2>
     <div class="small">Kalau ada bagian yang intonasinya kurang pas, tekan "Ulang" di bagian itu saja.</div>
     <div id="segs"></div>
     <audio id="fullAudio" controls style="display:none"></audio>
@@ -158,6 +200,8 @@ $("voice").value = store.get("voice","Charon");
 $("model").value = store.get("model","gemini-3.8-flash-tts");
 $("stylePreset").value = store.get("preset",$("stylePreset").options[0].value);
 $("styleCustom").value = store.get("custom","");
+$("cloneId").value = store.get("clone","");
+$("cloneId").oninput=()=>{store.set("clone",$("cloneId").value.trim()); markAllStale();};
 $("script").value = store.get("script","");
 $("splitMode").value = store.get("split","para");
 $("pause").value = store.get("pause","500");
@@ -175,6 +219,56 @@ $("styleCustom").oninput=()=>store.set("custom",$("styleCustom").value);
 $("script").oninput=()=>{store.set("script",$("script").value); updateStats();};
 $("splitMode").onchange=()=>{store.set("split",$("splitMode").value); updateStats();};
 $("pause").oninput=()=>{store.set("pause",$("pause").value); syncPause(); if(segments.some(s=>s.pcm)) buildFull();};
+
+// ---------- engine (Gemini / OmniVoice) ----------
+const ENGINE_INFO={
+  gemini:"Intonasi paling natural, pakai 30 suara bawaan Google. Butuh API key Gemini.",
+  omni:"Suara mirip lo dari rekaman referensi. Jalan di server gratis Hugging Face, jadi kadang antre. Intonasi ikut gaya rekaman referensi."
+};
+function syncEngine(){
+  const e=$("engine").value;
+  $("geminiBox").style.display = e==="gemini"?"block":"none";
+  $("omniBox").style.display = e==="omni"?"block":"none";
+  $("engineInfo").textContent = ENGINE_INFO[e];
+}
+$("engine").value = store.get("engine","gemini");
+$("engine").onchange=()=>{ store.set("engine",$("engine").value); syncEngine(); markAllStale(); };
+syncEngine();
+$("refText").value = store.get("refText","");
+$("refText").oninput=()=>{ store.set("refText",$("refText").value); markAllStale(); };
+$("hfToken").value = store.get("hf","");
+$("hfToken").oninput=()=>store.set("hf",$("hfToken").value.trim());
+$("omniSpeed").value = store.get("omniSpeed","1");
+$("omniSteps").value = store.get("omniSteps","32");
+function syncSpeed(){ $("omniSpeedV").textContent=(+$("omniSpeed").value).toFixed(2)+"×"; }
+syncSpeed();
+$("omniSpeed").oninput=()=>{ store.set("omniSpeed",$("omniSpeed").value); syncSpeed(); };
+$("omniSteps").onchange=()=>store.set("omniSteps",$("omniSteps").value);
+
+// reference audio kept in memory + localStorage (if it fits)
+let refBlob=null, refName="referensi.wav";
+function showRef(){
+  if(!refBlob){ return; }
+  $("refAudio").src=URL.createObjectURL(refBlob); $("refAudio").style.display="block";
+  $("refInfo").textContent=`Rekaman tersimpan: ${refName} (${(refBlob.size/1024).toFixed(0)} KB). Ganti kapan saja dengan pilih file lain.`;
+}
+(function loadRef(){
+  try{
+    const b64=localStorage.getItem("vo_refData"); if(!b64) return;
+    refName=localStorage.getItem("vo_refName")||refName;
+    const mime=localStorage.getItem("vo_refMime")||"audio/wav";
+    refBlob=new Blob([b64ToBytes(b64)],{type:mime}); showRef();
+  }catch(e){}
+})();
+$("refFile").onchange=async()=>{
+  const f=$("refFile").files[0]; if(!f) return;
+  refBlob=f; refName=f.name||"referensi.wav"; showRef(); markAllStale(); omniUpload=null;
+  try{
+    const buf=new Uint8Array(await f.arrayBuffer());
+    let bin=""; for(let i=0;i<buf.length;i+=8192) bin+=String.fromCharCode.apply(null,buf.subarray(i,i+8192));
+    localStorage.setItem("vo_refData",btoa(bin)); localStorage.setItem("vo_refName",refName); localStorage.setItem("vo_refMime",f.type||"audio/wav");
+  }catch(e){ $("refInfo").textContent+=" (File terlalu besar untuk disimpan permanen; pilih ulang kalau aplikasi dibuka lagi.)"; }
+};
 
 function getStyle(){ const p=$("stylePreset").value; return (p==="custom"?$("styleCustom").value:p).trim(); }
 function msg(t,cls){ $("msg").textContent=t||""; $("msg").style.color = cls==="err"?"var(--err)":cls==="ok"?"var(--ok)":"var(--muted)"; }
@@ -270,21 +364,89 @@ function retryDelay(j){
   try{ const d=(j.error.details||[]).find(x=>x.retryDelay); if(d) return Math.ceil(parseFloat(d.retryDelay))*1000; }catch(e){}
   return 20000;
 }
+// ---------- OmniVoice via Hugging Face Space (Gradio API) ----------
+const OMNI="https://k2-fsa-omnivoice.hf.space";
+let omniUpload=null; // {path, at}
+function hfHeaders(extra){ const h=Object.assign({},extra||{}); const t=$("hfToken").value.trim(); if(t) h["Authorization"]="Bearer "+t; return h; }
+async function omniUploadRef(){
+  if(omniUpload && Date.now()-omniUpload.at < 20*60*1000) return omniUpload.path;
+  const fd=new FormData(); fd.append("files", refBlob, refName);
+  let r; try{ r=await fetch(OMNI+"/gradio_api/upload",{method:"POST",headers:hfHeaders(),body:fd}); }
+  catch(e){ throw new Error("Gagal nyambung ke server OmniVoice. Cek internet, atau server lagi tidur/sibuk—coba lagi sebentar."); }
+  if(!r.ok) throw new Error("Upload rekaman gagal (HTTP "+r.status+"). Server OmniVoice mungkin lagi sibuk.");
+  const j=await r.json(); const path=Array.isArray(j)?j[0]:(j.files&&j.files[0]);
+  if(!path) throw new Error("Upload rekaman gagal.");
+  omniUpload={path, at:Date.now()}; return path;
+}
+function parseSSE(txt){
+  let ev=null, out=null, err=null;
+  for(const line of txt.split(/\n/)){
+    if(line.startsWith("event:")) ev=line.slice(6).trim();
+    else if(line.startsWith("data:")){
+      const d=line.slice(5).trim();
+      if(ev==="complete"){ try{ out=JSON.parse(d); }catch(e){} }
+      if(ev==="error"){ err = d && d!=="null" ? d.replace(/^"|"$/g,"") : "Server OmniVoice error."; }
+    }
+  }
+  return {out, err};
+}
+async function decodeAny(bytes){
+  if(bytes[0]===0x52&&bytes[1]===0x49&&bytes[2]===0x46&&bytes[3]===0x46) return decodeAudio(bytes,"");
+  const AC=window.AudioContext||window.webkitAudioContext; const ac=new AC();
+  const ab=await ac.decodeAudioData(bytes.buffer.slice(0));
+  const ch=ab.getChannelData(0), pcm=new Int16Array(ch.length);
+  for(let i=0;i<ch.length;i++){ const v=Math.max(-1,Math.min(1,ch[i])); pcm[i]=v*32767; }
+  try{ ac.close(); }catch(e){}
+  return {pcm, rate:ab.sampleRate};
+}
+async function omniTTS(text, onWait){
+  if(!refBlob) throw new Error("Pilih rekaman suara referensi dulu.");
+  const path=await omniUploadRef();
+  const file={path, meta:{_type:"gradio.FileData"}, orig_name:refName};
+  const data=[text,"Indonesian",file,$("refText").value.trim(),"",+$("omniSteps").value,2.0,true,+$("omniSpeed").value,null,true,true];
+  for(let tryN=0; tryN<3; tryN++){
+    let r;
+    try{ r=await fetch(OMNI+"/gradio_api/call/_clone_fn",{method:"POST",headers:hfHeaders({"Content-Type":"application/json"}),body:JSON.stringify({data})}); }
+    catch(e){ throw new Error("Gagal nyambung ke server OmniVoice. Coba lagi sebentar."); }
+    if(r.status===404||r.status===400){ omniUpload=null; }
+    if(!r.ok){ onWait&&onWait(8000); await sleep(8000); continue; }
+    const {event_id}=await r.json();
+    onWait && onWait(0);
+    const st=await fetch(OMNI+"/gradio_api/call/_clone_fn/"+event_id,{headers:hfHeaders()});
+    const {out, err}=parseSSE(await st.text());
+    if(err){
+      if(/quota|GPU|ZeroGPU|exceeded/i.test(err)) throw new Error("Jatah GPU gratis Hugging Face habis untuk sekarang. Isi token Hugging Face, atau coba lagi nanti. ("+err.slice(0,120)+")");
+      if(tryN<2){ await sleep(4000); continue; }
+      throw new Error("OmniVoice: "+err.slice(0,160));
+    }
+    const a=out && out[0];
+    if(!a){ const status=out&&out[1]; throw new Error("OmniVoice tidak mengirim audio. "+(status||"")); }
+    const url=a.url || (OMNI+"/gradio_api/file="+a.path);
+    const fr=await fetch(url,{headers:hfHeaders()});
+    if(!fr.ok) throw new Error("Gagal mengambil hasil audio (HTTP "+fr.status+").");
+    const d=await decodeAny(new Uint8Array(await fr.arrayBuffer()));
+    d.route="suara clone"; return d;
+  }
+  throw new Error("Server OmniVoice sibuk. Coba lagi beberapa menit lagi.");
+}
+
 async function tts(text, onWait){
-  const key=$("key").value.trim(); if(!key) throw new Error("Isi API key dulu di langkah 1.");
-  const model=$("model").value, voice=$("voice").value, style=getStyle();
+  if($("engine").value==="omni") return omniTTS(text, onWait);
+  const key=$("key").value.trim(); if(!key) throw new Error("Isi API key Gemini dulu.");
+  const model=$("model").value, style=getStyle();
+  const clone=$("cloneId").value.trim();
+  if(clone && !/^gemini-3\.8/.test(model)) throw new Error("Suara clone cuma bisa dipakai di model 3.8. Ganti model dulu.");
+  const voice = clone || $("voice").value;
   const base="https://generativelanguage.googleapis.com/v1beta/";
-  // Gemini 3.8 reads the text verbatim, so style must go in speech_metadata (never in the text).
-  const verbatim = /^gemini-3\.8/.test(model);
+  // Style is NEVER put inside the spoken text: it only goes in speech_metadata, which is not read aloud.
   const content = { type:"text", text };
   if(style) content.annotations=[{ type:"speech_metadata", style }];
   const interactions = { url:`${base}interactions`,
     body:{ model, input:[{ type:"user_input", content:[content] }], response_format:{type:"audio"}, generation_config:{ speech_config:[{voice}] } } };
-  const gcText = (!verbatim && style) ? `${style}:\n${text}` : text;
   const generate = { url:`${base}models/${model}:generateContent`,
-    body:{ contents:[{parts:[{text:gcText}]}],
+    body:{ contents:[{parts:[{text}]}],
            generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:voice } } } } } };
-  const attempts = verbatim ? [interactions, generate] : [generate, interactions];
+  const attempts = [interactions, generate];
   let lastErr="";
   for(const a of attempts){
     for(let tryN=0; tryN<4; tryN++){
@@ -293,7 +455,7 @@ async function tts(text, onWait){
       catch(e){ lastErr="Koneksi gagal. Cek internet."; await sleep(1500); continue; }
       if(res.status===200){
         const au=findAudio(res.json);
-        if(au) return decodeAudio(b64ToBytes(au.data), au.mime);
+        if(au){ const d=decodeAudio(b64ToBytes(au.data), au.mime); d.route = a===interactions ? "gaya aktif" : "tanpa gaya"; return d; }
         lastErr="Server tidak mengirim audio. Coba ulang atau ganti model."; break;
       }
       const em = res.json?.error?.message || ("HTTP "+res.status);
@@ -325,7 +487,7 @@ function renderSeg(s){
   }
   const st=s.el.querySelector(".st");
   st.className="st "+(s.status==="ok"?"ok":s.status==="err"?"err":s.status==="run"?"run":"");
-  st.textContent = s.status==="ok" ? (s.stale?"Selesai (suara lama)":"Selesai · "+(s.pcm.length/OUT_RATE).toFixed(1)+" dtk")
+  st.textContent = s.status==="ok" ? (s.stale?"Selesai (suara lama)":"Selesai · "+(s.pcm.length/OUT_RATE).toFixed(1)+" dtk"+(s.route?" · "+s.route:""))
     : s.status==="run" ? (s.note||"Memproses…") : s.status==="err" ? s.note : "Menunggu";
   s.el.querySelector(".play").disabled=!s.pcm;
   s.el.querySelector(".redo").disabled=busy;
@@ -340,8 +502,8 @@ function playSeg(s){
 async function genSeg(s){
   s.status="run"; s.note="Memproses…"; renderSeg(s);
   try{
-    const {pcm,rate}=await tts(s.text, w=>{ s.note=`Batas per menit, tunggu ${Math.round(w/1000)} dtk…`; renderSeg(s); });
-    s.pcm=resample(trimSilence(pcm,rate),rate,OUT_RATE); s.stale=false; s.status="ok";
+    const {pcm,rate,route}=await tts(s.text, w=>{ s.note = w? `Server sibuk, tunggu ${Math.round(w/1000)} dtk…` : "Antre di server & memproses…"; renderSeg(s); });
+    s.pcm=resample(trimSilence(pcm,rate),rate,OUT_RATE); s.route=route; s.stale=false; s.status="ok";
   }catch(e){ s.status="err"; s.note=e.message; throw e; }
   finally{ renderSeg(s); }
 }
@@ -351,9 +513,10 @@ function setBusy(b){ busy=b; $("genBtn").disabled=b; $("sampleBtn").disabled=b; 
 $("genBtn").onclick=async()=>{
   const parts=splitScript($("script").value,$("splitMode").value);
   if(!parts.length){ msg("Skrip masih kosong.","err"); return; }
-  if(!$("key").value.trim()){ msg("Isi API key dulu di langkah 1.","err"); return; }
+  if($("engine").value==="gemini" && !$("key").value.trim()){ msg("Isi API key Gemini dulu.","err"); return; }
+  if($("engine").value==="omni" && !refBlob){ msg("Pilih rekaman suara referensi dulu.","err"); return; }
   // keep finished segments whose text unchanged
-  const old=new Map(segments.filter(s=>s.pcm&&!s.stale).map(s=>[s.text,s]));
+  const old=new Map();
   $("segs").innerHTML="";
   segments=parts.map(t=>{ const o=old.get(t); return o?{...o,el:null}:{text:t,status:"wait"}; });
   segments.forEach(renderSeg);
@@ -364,12 +527,12 @@ $("genBtn").onclick=async()=>{
     const s=segments[i];
     if(s.pcm && !s.stale) continue;
     msg(`Membuat bagian ${i+1} dari ${segments.length}…`);
-    try{ await genSeg(s); }catch(e){ failed++; if(/Kuota|API key|ditolak/.test(e.message)){ msg(e.message,"err"); break; } }
+    try{ await genSeg(s); }catch(e){ failed++; if(/Kuota|API key|ditolak|Jatah GPU|referensi/.test(e.message)){ msg(e.message,"err"); break; } }
   }
   setBusy(false);
   buildFull();
   if(!failed) msg("Selesai! Dengarkan di bawah, lalu Download.","ok");
-  else if(!/Kuota|API key|ditolak/.test($("msg").textContent)) msg(`${failed} bagian gagal. Tekan "Ulang" di bagian itu.`,"err");
+  else if(!/Kuota|API key|ditolak|Jatah GPU|referensi/.test($("msg").textContent)) msg(`${failed} bagian gagal. Tekan "Ulang" di bagian itu.`,"err");
 };
 async function regen(s){
   if(busy) return;
@@ -404,7 +567,7 @@ $("dlBtn").onclick=()=>{
 $("sampleBtn").onclick=async()=>{
   setBusy(true); msg("Membuat contoh suara…");
   try{
-    const {pcm,rate}=await tts("Halo! Pernah kepikiran nggak, kenapa langit malam itu gelap, padahal bintangnya ada miliaran?", w=>msg(`Batas per menit, tunggu ${Math.round(w/1000)} dtk…`));
+    const {pcm,rate}=await tts("Halo! Pernah kepikiran nggak, kenapa langit malam itu gelap, padahal bintangnya ada miliaran?", w=>msg(w?`Server sibuk, tunggu ${Math.round(w/1000)} dtk…`:"Antre di server & memproses…"));
     const url=URL.createObjectURL(wavBlob(resample(trimSilence(pcm,rate),rate,OUT_RATE),OUT_RATE));
     $("sampleAudio").src=url; $("sampleAudio").style.display="block"; $("sampleAudio").play().catch(()=>{});
     msg("Contoh suara siap.","ok");
